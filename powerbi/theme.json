@@ -1,0 +1,25 @@
+{
+  "name": "BlitzLogisticsTheme",
+  "dataColors": [
+    "#1E88E5",
+    "#2E7D32",
+    "#D32F2F",
+    "#FB8C00",
+    "#8E24AA",
+    "#00ACC1",
+    "#3949AB",
+    "#7CB342"
+  ],
+  "background": "#FFFFFF",
+  "foreground": "#212121",
+  "tableAccent": "#1E88E5",
+  "visualStyles": {
+    "*": {
+      "*": {
+        "outspace": [{ "color": { "solid": { "color": "#FAFAFA" } } }],
+        "border": [{ "show": true, "color": { "solid": { "color": "#E0E0E0" } }, "radius": 6 }]
+      }
+    }
+  }
+}
+

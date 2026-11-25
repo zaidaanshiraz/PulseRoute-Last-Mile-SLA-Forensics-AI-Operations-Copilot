@@ -1,0 +1,234 @@
+// ==============================================================================
+// FILE: DAX_Measures.dax
+// PROJECT: Last-Mile Delivery Analytics (Blitz Internship Portfolio)
+// PURPOSE: Enterprise DAX Measure Definitions for Power BI Data Model
+// TECHNIQUES: COUNTROWS, DISTINCTCOUNT, CALCULATE, DIVIDE, AVERAGE, SUMX, ALLSELECTED
+// ==============================================================================
+
+// ------------------------------------------------------------------------------
+// TABLE: _Measures (Dedicated Measure Table)
+// ------------------------------------------------------------------------------
+
+// ------------------------------------------------------------------------------
+// 1. BASE VOLUME & THROUGHPUT MEASURES
+// ------------------------------------------------------------------------------
+
+[Total Deliveries] = 
+COUNTROWS('Fact_Deliveries')
+/*
+EXPLANATION:
+COUNTROWS counts the number of rows in the Fact_Deliveries table within the active
+filter context. Unlike COUNT('Fact_Deliveries'[Order_ID]), COUNTROWS is optimized by 
+the VertiPaq engine as a metadata-level operation and does not scan individual column values.
+*/
+
+[Active Cities Count] = 
+DISTINCTCOUNT('Fact_Deliveries'[City_ID])
+/*
+EXPLANATION:
+DISTINCTCOUNT computes unique occurrences. Evaluates the count of distinct operational
+city nodes serviced within the current filter context.
+*/
+
+[Active 3PL Vendors Count] = 
+DISTINCTCOUNT('Fact_Deliveries'[Vendor_ID])
+
+[Total Delivery Agents] = 
+DISTINCTCOUNT('Fact_Deliveries'[Delivery_Agent_ID])
+
+[Total GMV] = 
+SUM('Fact_Deliveries'[Order_Value_INR])
+/*
+EXPLANATION:
+Computes total Gross Merchandise Value (revenue) delivered across the logistics network.
+*/
+
+
+// ------------------------------------------------------------------------------
+// 2. ON-TIME & DELAY CLASSIFICATION MEASURES
+// ------------------------------------------------------------------------------
+
+[On-Time Deliveries] = 
+CALCULATE(
+    COUNTROWS('Fact_Deliveries'),
+    'Fact_Deliveries'[Calculated_Delay_Days] <= 0
+)
+/*
+EXPLANATION:
+CALCULATE modifies the existing filter context. It adds a boolean filter condition:
+'Calculated_Delay_Days' <= 0 (orders delivered early or exactly on promised date).
+*/
+
+[Delayed Deliveries] = 
+CALCULATE(
+    COUNTROWS('Fact_Deliveries'),
+    'Fact_Deliveries'[Calculated_Delay_Days] > 0
+)
+/*
+EXPLANATION:
+Counts completed dispatches where package was delivered strictly after the promised date.
+*/
+
+[On-Time Delivery %] = 
+DIVIDE(
+    [On-Time Deliveries],
+    [Total Deliveries],
+    0
+)
+/*
+EXPLANATION:
+DIVIDE performs safe division with zero-division handling (third parameter 0).
+Prevents #DIV/0! errors when slicer combinations yield empty subsets.
+*/
+
+[Delay Rate %] = 
+DIVIDE(
+    [Delayed Deliveries],
+    [Total Deliveries],
+    0
+)
+
+
+// ------------------------------------------------------------------------------
+// 3. SLA BREACH & GOVERNANCE MEASURES
+// ------------------------------------------------------------------------------
+
+[SLA Breaches] = 
+CALCULATE(
+    COUNTROWS('Fact_Deliveries'),
+    'Fact_Deliveries'[Calculated_Delay_Days] > 2
+)
+/*
+EXPLANATION:
+Contractual SLA penalty threshold is defined as delivery exceeding promised date by > 2 days.
+CALCULATE evaluates only records meeting this contractual breach condition.
+*/
+
+[SLA Breach %] = 
+DIVIDE(
+    [SLA Breaches],
+    [Total Deliveries],
+    0
+)
+
+[SLA Target Benchmark %] = 
+0.20
+// Target threshold for contractual SLA breach rate (20.0%)
+
+[SLA Variance to Target %] = 
+[SLA Breach %] - [SLA Target Benchmark %]
+
+[Revenue at Risk (SLA Breached GMV)] = 
+CALCULATE(
+    [Total GMV],
+    'Fact_Deliveries'[Calculated_Delay_Days] > 2
+)
+/*
+EXPLANATION:
+Quantifies the monetary value of shipments subject to customer churn or carrier chargebacks.
+*/
+
+
+// ------------------------------------------------------------------------------
+// 4. DURATION & LEAD TIME MEASURES (AVERAGE & SUMX)
+// ------------------------------------------------------------------------------
+
+[Average Delay Days (All Deliveries)] = 
+AVERAGE('Fact_Deliveries'[Calculated_Delay_Days])
+/*
+EXPLANATION:
+Computes the arithmetic mean of Calculated_Delay_Days across all deliveries,
+including early deliveries (negative values) and on-time deliveries (0).
+*/
+
+[Average Delay Days (Delayed Deliveries Only)] = 
+CALCULATE(
+    AVERAGE('Fact_Deliveries'[Calculated_Delay_Days]),
+    'Fact_Deliveries'[Calculated_Delay_Days] > 0
+)
+/*
+EXPLANATION:
+In logistics operations, calculating average delay across all orders dilutes late order severity.
+This measure evaluates delay magnitude strictly when a failure occurs.
+*/
+
+[Average Delivery Lead Time Days] = 
+AVERAGE('Fact_Deliveries'[Delivery_Lead_Time_Days])
+/*
+EXPLANATION:
+End-to-end customer order-to-doorstep duration: Actual_Delivery_Date minus Order_Date.
+*/
+
+[Weighted Delay by GMV] = 
+DIVIDE(
+    SUMX(
+        'Fact_Deliveries',
+        'Fact_Deliveries'[Calculated_Delay_Days] * 'Fact_Deliveries'[Order_Value_INR]
+    ),
+    [Total GMV],
+    0
+)
+/*
+EXPLANATION:
+SUMX is an iterator function that computes an expression row-by-row in a row context:
+(Calculated_Delay_Days * Order_Value_INR), then aggregates the sum and divides by Total GMV.
+Weights delivery delay severity by order dollar value.
+*/
+
+
+// ------------------------------------------------------------------------------
+// 5. RELATIVE & WINDOW CONTRIBUTION MEASURES (ALLSELECTED)
+// ------------------------------------------------------------------------------
+
+[Total Filtered Delays (Network-Wide)] = 
+CALCULATE(
+    [Delayed Deliveries],
+    ALLSELECTED('Fact_Deliveries')
+)
+/*
+EXPLANATION:
+ALLSELECTED removes context filters from the visual (e.g. city or vendor grouping) 
+while respecting active external report slicers. Provides the grand-total denominator.
+*/
+
+[Delay Contribution %] = 
+DIVIDE(
+    [Delayed Deliveries],
+    [Total Filtered Delays (Network-Wide)],
+    0
+)
+/*
+EXPLANATION:
+Calculates the exact percentage of total network delays generated by the current entity
+(e.g., Surat contributes 7.59% of all delays nationwide).
+*/
+
+
+// ------------------------------------------------------------------------------
+// 6. TIME-INTELLIGENCE & SEASONAL MEASURES
+// ------------------------------------------------------------------------------
+
+[Festive Season Deliveries] = 
+CALCULATE(
+    [Total Deliveries],
+    'Fact_Deliveries'[Is_Festive_Season] = "Yes"
+)
+
+[Monsoon Season Deliveries] = 
+CALCULATE(
+    [Total Deliveries],
+    'Fact_Deliveries'[Is_Monsoon_Season] = "Yes"
+)
+
+[Festive Season SLA Breach %] = 
+CALCULATE(
+    [SLA Breach %],
+    'Fact_Deliveries'[Is_Festive_Season] = "Yes"
+)
+
+[Monsoon Season SLA Breach %] = 
+CALCULATE(
+    [SLA Breach %],
+    'Fact_Deliveries'[Is_Monsoon_Season] = "Yes"
+)
+

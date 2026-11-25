@@ -1,0 +1,36 @@
+{
+  "generated_at": "2026-11-11T20:35:10.874844",
+  "total_records": 5200,
+  "duplicate_order_ids": 0,
+  "missing_values": {
+    "Order_ID": 0,
+    "Order_Date": 0,
+    "Promised_Delivery_Date": 0,
+    "Actual_Delivery_Date": 0,
+    "City": 0,
+    "Zone": 0,
+    "Vendor": 0,
+    "Delay_Reason": 3197
+  },
+  "invalid_dates": {
+    "negative_lead_time_days": 0,
+    "promised_before_ordered": 0
+  },
+  "discrepancies": {
+    "delay_calculation_mismatches": 252,
+    "sla_flag_mismatches": 99,
+    "missing_delay_reason_flagged": 233,
+    "same_day_timestamp_effect": 0
+  },
+  "delivery_status_breakdown": {
+    "Delayed": 2003,
+    "On-Time": 1601,
+    "Early": 1596
+  },
+  "sla_breach_breakdown": {
+    "No": 3741,
+    "Yes": 1459
+  },
+  "flagged_records_total": 1723,
+  "clean_record_integrity_pct": 95.15
+}

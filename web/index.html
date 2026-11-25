@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PulseRoute — Operations &amp; SLA Analytics</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-outer: #D5CFC7;
+      --frame-dark: #252A30;
+      --sidebar-dark: #2C3137;
+      --sidebar-pill: #3A4047;
+      --canvas-bg: #E6E1DA;
+      --card-bg: #F3EFEA;
+      --card-border: #DCD6CD;
+      --text-primary: #1F2428;
+      --text-secondary: #686E73;
+      --slate-accent: #323A45;
+      --taupe-accent: #8C8275;
+    }
+
+    body {
+      background-color: var(--bg-outer);
+      color: var(--text-primary);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+    }
+
+    .enterprise-frame {
+      background-color: var(--frame-dark);
+      border-radius: 22px;
+      padding: 0;
+      box-shadow: 0 28px 60px -15px rgba(24, 28, 32, 0.45), 0 0 0 6px #343A40;
+      overflow: hidden;
+    }
+
+    .sidebar-panel {
+      background-color: var(--sidebar-dark);
+      color: #D8DEE4;
+      border-right: 1px solid #3A4047;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #B8C0C8;
+      transition: all 0.15s ease;
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+    }
+    .nav-item:hover {
+      background-color: rgba(255, 255, 255, 0.06);
+      color: #FFFFFF;
+    }
+    .nav-item.active {
+      background-color: #3A4047;
+      color: #FCD34D;
+      border-left: 3px solid #F59E0B;
+      font-weight: 600;
+    }
+
+    .slicer-pill {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+      padding: 6px 11px;
+      border-radius: 6px;
+      background-color: #353B42;
+      color: #CFD6DC;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: 1px solid transparent;
+      text-align: left;
+    }
+    .slicer-pill:hover {
+      background-color: #3E454D;
+    }
+    .slicer-pill.active {
+      background-color: #464E57;
+      color: #FFFFFF;
+      border-color: #7D858D;
+      font-weight: 600;
+    }
+    .slicer-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 9999px;
+      background-color: #7D858D;
+      flex-shrink: 0;
+    }
+    .slicer-pill.active .slicer-dot {
+      background-color: #FFFFFF;
+    }
+
+    .sidebar-select {
+      width: 100%;
+      background-color: #353B42;
+      color: #E2E6EA;
+      border: 1px solid #454C54;
+      border-radius: 6px;
+      padding: 6px 9px;
+      font-size: 11px;
+      font-weight: 500;
+      outline: none;
+      cursor: pointer;
+    }
+    .sidebar-select:focus {
+      border-color: #8C959E;
+    }
+
+    .workspace-canvas {
+      background-color: var(--canvas-bg);
+    }
+
+    .bi-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(31, 36, 40, 0.04);
+    }
+
+    .copilot-example-card {
+      background-color: #E6E1DA;
+      border: 1px solid #D5CFC7;
+      border-radius: 8px;
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+    .copilot-example-card:hover {
+      background-color: #DCD6CD;
+      border-color: #B8B0A4;
+    }
+    .copilot-example-card.active {
+      background-color: #2C343D;
+      border-color: #2C343D;
+      color: #FFFFFF;
+    }
+
+    .delta-pos { color: #2B6E46; font-weight: 600; }
+    .delta-neg { color: #A63A3A; font-weight: 600; }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #E6E1DA; }
+    ::-webkit-scrollbar-thumb { background: #B8B1A6; border-radius: 3px; }
+  </style>
+</head>
+<body class="p-3 md:p-6">
+
+  <!-- ENTERPRISE DARK-BEZEL APPLICATION SHELL -->
+  <div class="max-w-[1620px] mx-auto enterprise-frame flex flex-col min-h-[880px]">
+
+    <!-- TOP DARK HEADER BAR -->
+    <header class="bg-[#252A30] text-white px-5 py-3 flex items-center justify-between border-b border-[#383E46]">
+      <div class="flex items-center gap-8">
+        <!-- Brand Logo & Title -->
+        <div class="flex items-center gap-2.5 w-[195px]">
+          <div class="w-7 h-7 rounded-full border border-amber-400/80 bg-amber-500/20 text-amber-300 flex items-center justify-center text-xs font-bold tracking-tighter">
+            PR
+          </div>
+          <div class="leading-tight">
+            <div class="text-xs font-bold tracking-tight text-white">PulseRoute</div>
+            <div class="text-[10px] text-amber-300/90 font-medium">Logistics &amp; SLA Forensics</div>
+          </div>
+        </div>
+
+        <!-- Active View Title + Live Filter Scope -->
+        <div class="flex flex-wrap items-center gap-3">
+          <h1 id="header-view-title" class="text-base font-bold tracking-tight text-white">Delivery Operations Overview</h1>
+          <span id="header-filter-badge" class="px-2.5 py-0.5 rounded-full bg-[#353B42] text-[11px] font-mono text-slate-200 border border-[#464E57]">
+            Scope: All Seasons · All Modes · 5,200 / 5,200 Dispatches
+          </span>
+        </div>
+      </div>
+
+      <!-- Right User Profile & Utilities -->
+      <div class="flex items-center gap-4 text-xs text-slate-300">
+        <span class="hidden md:inline-block px-2.5 py-1 rounded bg-[#353B42] text-[11px] font-mono text-slate-200 border border-[#464E57]">71/71 Pytest Verified</span>
+        <div class="flex items-center gap-2 pl-2 border-l border-[#3A4047]">
+          <div class="w-6 h-6 rounded-full bg-[#49515A] text-white flex items-center justify-center text-[10px] font-bold">MZ</div>
+          <span class="font-medium text-slate-200">Mohammed Zaidaan Shiraz</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN BODY: LEFT CHARCOAL SIDEBAR + RIGHT WARM SAND WORKSPACE -->
+    <div class="flex-1 flex flex-col lg:flex-row">
+
+      <!-- LEFT CHARCOAL SIDEBAR (NAVIGATION + SLICER PILLS + METADATA) -->
+      <aside class="sidebar-panel w-full lg:w-[228px] shrink-0 p-4 flex flex-col justify-between">
+        <div class="space-y-4">
+          <!-- Navigation Links -->
+          <nav class="space-y-1">
+            <button type="button" onclick="switchTab('overview')" id="tab-btn-overview" class="nav-item active">
+              <i data-lucide="home" class="w-3.5 h-3.5"></i> Operations Overview
+            </button>
+            <button type="button" onclick="switchTab('forensics')" id="tab-btn-forensics" class="nav-item">
+              <i data-lucide="check-square" class="w-3.5 h-3.5"></i> Data Quality Audit
+            </button>
+            <button type="button" onclick="switchTab('rebalance')" id="tab-btn-rebalance" class="nav-item">
+              <i data-lucide="sliders" class="w-3.5 h-3.5"></i> Carrier Simulation
+            </button>
+            <button type="button" onclick="switchTab('copilot')" id="tab-btn-copilot" class="nav-item">
+              <i data-lucide="terminal" class="w-3.5 h-3.5"></i> Read-Only SQL Copilot
+            </button>
+            <button type="button" onclick="switchTab('anomalies')" id="tab-btn-anomalies" class="nav-item">
+              <i data-lucide="activity" class="w-3.5 h-3.5"></i> Forecast &amp; Outliers
+            </button>
+          </nav>
+
+          <hr class="border-[#3A4047]" />
+
+          <!-- Season Quick-Slicer Pills -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between px-1">
+              <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Operating Season</span>
+              <span id="sidebar-season-tag" class="text-[10px] font-mono text-slate-300">All</span>
+            </div>
+            <button type="button" data-season="All" onclick="setQuickSeason('All', this)" class="slicer-pill season-pill active">
+              <span class="flex items-center gap-2"><span class="slicer-dot"></span> All Seasons</span>
+              <span class="text-[10px] font-mono opacity-75">5,200</span>
+            </button>
+            <button type="button" data-season="Normal" onclick="setQuickSeason('Normal', this)" class="slicer-pill season-pill">
+              <span class="flex items-center gap-2"><span class="slicer-dot"></span> Standard Operations</span>
+              <span class="text-[10px] font-mono opacity-75">Normal</span>
+            </button>
+            <button type="button" data-season="Monsoon" onclick="setQuickSeason('Monsoon', this)" class="slicer-pill season-pill">
+              <span class="flex items-center gap-2"><span class="slicer-dot"></span> Monsoon Surge</span>
+              <span class="text-[10px] font-mono opacity-75">Weather</span>
+            </button>
+            <button type="button" data-season="Festive" onclick="setQuickSeason('Festive', this)" class="slicer-pill season-pill">
+              <span class="flex items-center gap-2"><span class="slicer-dot"></span> Festive Peak</span>
+              <span class="text-[10px] font-mono opacity-75">Peak</span>
+            </button>
+          </div>
+
+          <!-- Payment Mode Quick-Slicer Pills -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between px-1">
+              <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Settlement Mode</span>
+              <span id="sidebar-payment-tag" class="text-[10px] font-mono text-slate-300">All</span>
+            </div>
+            <button type="button" data-payment="All" onclick="setQuickPayment('All', this)" class="slicer-pill payment-pill active">
+              <span class="flex items-center gap-2"><span class="slicer-dot"></span> All Modes</span>
+              <span class="text-[10px] font-mono opacity-75">100%</span>
+            </button>
+            <button type="button" data-payment="Prepaid" onclick="setQuickPayment('Prepaid', this)" class="slicer-pill payment-pill">
+              <span class="flex items-center gap-2"><span class="slicer-dot"></span> Prepaid Orders</span>
+              <span class="text-[10px] font-mono opacity-75">Digital</span>
+            </button>
+            <button type="button" data-payment="COD" onclick="setQuickPayment('COD', this)" class="slicer-pill payment-pill">
+              <span class="flex items-center gap-2"><span class="slicer-dot"></span> Cash on Delivery</span>
+              <span class="text-[10px] font-mono opacity-75">COD</span>
+            </button>
+          </div>
+
+          <!-- Dimension Slicers -->
+          <div class="space-y-2 pt-1">
+            <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1">Dimension Slicers</div>
+            <select id="filter-zone" onchange="onDimensionSlicerChange()" class="sidebar-select">
+              <option value="All">Zone: All</option>
+              <option value="Central">Central</option>
+              <option value="East">East</option>
+              <option value="North">North</option>
+              <option value="South">South</option>
+              <option value="West">West</option>
+            </select>
+            <select id="filter-city" onchange="onDimensionSlicerChange()" class="sidebar-select">
+              <option value="All">City: All</option>
+            </select>
+            <select id="filter-vendor" onchange="onDimensionSlicerChange()" class="sidebar-select">
+              <option value="All">Carrier: All</option>
+            </select>
+            <select id="filter-category" onchange="onDimensionSlicerChange()" class="sidebar-select">
+              <option value="All">Category: All</option>
+            </select>
+            <input type="hidden" id="filter-payment" value="All" />
+            <input type="hidden" id="filter-season" value="All" />
+          </div>
+        </div>
+
+        <!-- Bottom Reset & Timestamp -->
+        <div class="pt-4 border-t border-[#3A4047] space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <button type="button" onclick="resetFilters()" class="flex-1 px-2.5 py-1.5 rounded bg-[#3A4047] hover:bg-[#49515A] text-[11px] font-medium text-white transition flex items-center justify-center gap-1.5">
+              <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Reset All Slicers
+            </button>
+            <button type="button" onclick="switchTab('copilot')" class="w-7 h-7 rounded-full bg-[#3A4047] hover:bg-[#49515A] flex items-center justify-center text-white transition shrink-0" title="Open Read-Only SQL Copilot">
+              <i data-lucide="play" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+          <div class="text-[11px] text-slate-400 leading-snug">
+            <div class="flex items-center justify-between text-slate-300 font-medium">
+              <span>Matched Cohort:</span>
+              <span id="sidebar-matched-count" class="font-mono text-white font-bold">5,200 rows</span>
+            </div>
+            <div class="mt-0.5 font-mono text-[10px]">SQLite Star Schema (?mode=ro)</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- RIGHT WARM SAND WORKSPACE -->
+      <main class="workspace-canvas flex-1 p-5 overflow-x-hidden">
+
+        <!-- ================================================================ -->
+        <!-- TAB 1: OPERATIONS OVERVIEW (EXACT 3-ROW GRID FROM IMAGE)         -->
+        <!-- ================================================================ -->
+        <div id="tab-overview" class="space-y-4">
+
+          <!-- ROW 1: 5 KPI CARDS WITH INLINE SPARKLINE + BENCHMARK DELTAS -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+
+            <!-- KPI 1: Total Dispatches -->
+            <div class="bi-card p-3.5 flex flex-col justify-between">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <div class="text-[11px] font-medium text-[#686E73]">Audited Dispatches</div>
+                  <div id="kpi-total" class="text-2xl font-extrabold text-[#1F2428] mt-0.5">5,200</div>
+                </div>
+                <div id="spark-1" class="w-[82px] h-[42px]"></div>
+              </div>
+              <div class="grid grid-cols-2 pt-2 mt-2 border-t border-[#E2DDD5] text-[10px]">
+                <div>
+                  <div class="text-[#686E73]">On-Time / Early:</div>
+                  <div id="kpi-total-bm" class="font-bold text-[#1F2428] mt-0.5">3,197 On-Time</div>
+                </div>
+                <div>
+                  <div class="text-[#686E73]">Delayed Vol:</div>
+                  <div id="kpi-total-delta" class="delta-neg mt-0.5">▲ 2,003 Delayed</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- KPI 2: Total Cohort GMV -->
+            <div class="bi-card p-3.5 flex flex-col justify-between">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <div class="text-[11px] font-medium text-[#686E73]">Total Cohort GMV</div>
+                  <div id="kpi-gmv" class="text-2xl font-extrabold text-[#1F2428] mt-0.5">₹38.85M</div>
+                </div>
+                <div id="spark-2" class="w-[82px] h-[42px]"></div>
+              </div>
+              <div class="grid grid-cols-2 pt-2 mt-2 border-t border-[#E2DDD5] text-[10px]">
+                <div>
+                  <div class="text-[#686E73]">Risk GMV:</div>
+                  <div id="kpi-gmv-bm" class="font-bold text-[#1F2428] mt-0.5">₹10.81M</div>
+                </div>
+                <div>
+                  <div class="text-[#686E73]">Protected %:</div>
+                  <div id="kpi-gmv-delta" class="delta-pos mt-0.5">▲ 72.2% Safe</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- KPI 3: Average Lead Time -->
+            <div class="bi-card p-3.5 flex flex-col justify-between">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <div class="text-[11px] font-medium text-[#686E73]">Average Lead Time</div>
+                  <div id="kpi-lead" class="text-2xl font-extrabold text-[#1F2428] mt-0.5">4.01 d</div>
+                </div>
+                <div id="spark-3" class="w-[82px] h-[42px]"></div>
+              </div>
+              <div class="grid grid-cols-2 pt-2 mt-2 border-t border-[#E2DDD5] text-[10px]">
+                <div>
+                  <div class="text-[#686E73]">Promised:</div>
+                  <div id="kpi-lead-bm" class="font-bold text-[#1F2428] mt-0.5">3.50 d</div>
+                </div>
+                <div>
+                  <div class="text-[#686E73]">Avg Late:</div>
+                  <div id="kpi-lead-delta" class="delta-neg mt-0.5">+3.49 d Late</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- KPI 4: On-Time / Early Rate -->
+            <div class="bi-card p-3.5 flex flex-col justify-between">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <div class="text-[11px] font-medium text-[#686E73]">On-Time / Early Rate</div>
+                  <div id="kpi-ontime" class="text-2xl font-extrabold text-[#1F2428] mt-0.5">61.48%</div>
+                </div>
+                <div id="spark-4" class="w-[82px] h-[42px]"></div>
+              </div>
+              <div class="grid grid-cols-2 pt-2 mt-2 border-t border-[#E2DDD5] text-[10px]">
+                <div>
+                  <div class="text-[#686E73]">Target SLA:</div>
+                  <div class="font-bold text-[#1F2428] mt-0.5">70.00%</div>
+                </div>
+                <div>
+                  <div class="text-[#686E73]">Variance:</div>
+                  <div id="kpi-ontime-delta" class="delta-neg mt-0.5">▼ -8.52%</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- KPI 5: SLA Breach Rate (>2d) -->
+            <div class="bi-card p-3.5 flex flex-col justify-between">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <div class="text-[11px] font-medium text-[#686E73]">SLA Breach Rate (&gt;2d)</div>
+                  <div id="kpi-breach" class="text-2xl font-extrabold text-[#1F2428] mt-0.5">28.06%</div>
+                </div>
+                <div id="spark-5" class="w-[82px] h-[42px]"></div>
+              </div>
+              <div class="grid grid-cols-2 pt-2 mt-2 border-t border-[#E2DDD5] text-[10px]">
+                <div>
+                  <div class="text-[#686E73]">Ceiling:</div>
+                  <div class="font-bold text-[#1F2428] mt-0.5">20.00%</div>
+                </div>
+                <div>
+                  <div class="text-[#686E73]">Breaches:</div>
+                  <div id="kpi-breach-delta" class="delta-neg mt-0.5">▲ 1,459 Orders</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- ROW 2: COLUMN BAR CHART (5 COLS) + ZONE DONUT (4 COLS) + ROOT CAUSE BARS (3 COLS) -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-3.5">
+
+            <!-- Left (5 cols): Delivery Volume by Status Cohort -->
+            <div class="lg:col-span-5 bi-card p-4 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between">
+                  <h3 class="text-xs font-bold text-[#1F2428]">Dispatch Volume by Delivery Status Cohort</h3>
+                  <i data-lucide="chevron-right" class="w-4 h-4 text-[#686E73]"></i>
+                </div>
+                <p class="text-[10px] italic text-[#686E73]">Drilldown: Ground-Truth Date Calculation (Actual - Promised)</p>
+              </div>
+              <div id="chart-status-columns" class="w-full h-[215px]"></div>
+            </div>
+
+            <!-- Center (4 cols): SLA Breaches by Geographic Zone Donut -->
+            <div class="lg:col-span-4 bi-card p-4 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between">
+                  <h3 class="text-xs font-bold text-[#1F2428]">Dispatch Distribution by Geographic Zone</h3>
+                  <i data-lucide="chevron-right" class="w-4 h-4 text-[#686E73]"></i>
+                </div>
+                <p class="text-[10px] italic text-[#686E73]">Drilldown: Zone &gt; 15 Fulfillment Cities</p>
+              </div>
+              <div id="chart-zone-donut" class="w-full h-[215px]"></div>
+            </div>
+
+            <!-- Right (3 cols): Top Delay Root Causes Progress Bars -->
+            <div class="lg:col-span-3 bi-card p-4 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between">
+                  <h3 class="text-xs font-bold text-[#1F2428]">Delay Volume by Root Cause</h3>
+                  <i data-lucide="chevron-right" class="w-4 h-4 text-[#686E73]"></i>
+                </div>
+                <p class="text-[10px] italic text-[#686E73]">Drilldown: Verified Delayed Cohort</p>
+              </div>
+              <div id="root-cause-bars" class="space-y-2.5 my-auto py-2"></div>
+            </div>
+
+          </div>
+
+          <!-- ROW 3: HUB DETAILS TABLE + FOOTNOTE (5 COLS) | CARRIER H-BARS (4 COLS) | SLA COMPLIANCE DONUT (3 COLS) -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-3.5">
+
+            <!-- Left (5 cols): Table Card + Bottom Summary Card -->
+            <div class="lg:col-span-5 flex flex-col gap-3.5">
+              <div class="bi-card p-4 flex-1 flex flex-col justify-between">
+                <div>
+                  <h3 class="text-xs font-bold text-[#1F2428] mb-2">City Hub Performance by KPI-Measure</h3>
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-[11px]">
+                      <thead>
+                        <tr class="border-b border-[#DCD6CD] text-[#686E73] font-medium">
+                          <th class="py-1.5 px-2">Hub ID</th>
+                          <th class="py-1.5 px-2">City / Zone</th>
+                          <th class="py-1.5 px-2 text-right">Dispatches</th>
+                          <th class="py-1.5 px-2 text-right">Delayed</th>
+                          <th class="py-1.5 px-2 text-right">Breach %</th>
+                        </tr>
+                      </thead>
+                      <tbody id="city-hub-tbody" class="divide-y divide-[#E5E0D8]"></tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="pt-2 mt-2 border-t border-[#E2DDD5] flex justify-end">
+                  <button type="button" onclick="switchTab('forensics')" class="text-[10px] italic font-medium text-[#323A45] hover:underline flex items-center gap-1">
+                    Go to Data Quality Audit (252 / 99 / 233) for record details <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Bottom Status Card -->
+              <div class="bi-card px-4 py-2.5 flex items-center justify-between text-[11px] text-[#495057]">
+                <span id="executive-status-line" class="font-medium truncate">Audit Status: 252 Delay Mismatches, 99 SLA Contradictions &amp; 233 Null Reasons Reconciled</span>
+                <span class="font-mono text-[10px] text-[#686E73] shrink-0 ml-2">SQLite ?mode=ro</span>
+              </div>
+            </div>
+
+            <!-- Center (4 cols): 3PL Carrier Horizontal Pill Bars -->
+            <div class="lg:col-span-4 bi-card p-4 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between">
+                  <h3 class="text-xs font-bold text-[#1F2428]">SLA Breach Rate by 3PL Carrier Partner</h3>
+                  <i data-lucide="chevron-right" class="w-4 h-4 text-[#686E73]"></i>
+                </div>
+                <p class="text-[10px] italic text-[#686E73]">Drilldown: Carrier &gt; Contract SLA Compliance</p>
+              </div>
+              <div id="carrier-pill-bars" class="space-y-2 my-auto py-2"></div>
+            </div>
+
+            <!-- Right (3 cols): SLA Compliance Breakdown Donut -->
+            <div class="lg:col-span-3 bi-card p-4 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between">
+                  <h3 class="text-xs font-bold text-[#1F2428]">Orders by SLA Compliance Tier</h3>
+                  <i data-lucide="chevron-right" class="w-4 h-4 text-[#686E73]"></i>
+                </div>
+                <p class="text-[10px] italic text-[#686E73]">Drilldown: Delivery Status &gt; Category</p>
+              </div>
+              <div id="chart-sla-donut" class="w-full h-[225px]"></div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- ================================================================ -->
+        <!-- TAB 2: DATA QUALITY AUDIT (252 / 99 / 233)                       -->
+        <!-- ================================================================ -->
+        <div id="tab-forensics" class="hidden space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3.5">
+            <div class="bi-card p-4">
+              <div class="text-[10px] font-mono uppercase text-[#686E73]">Finding 01 · Date vs Delay Math</div>
+              <div id="dq-count-252" class="text-2xl font-extrabold text-[#1F2428] mt-1">252</div>
+              <div class="text-xs font-bold text-[#323A45] mt-1">Delayed Orders with Wrong Delay_Days</div>
+              <p class="text-[11px] text-[#686E73] mt-1">233 orders marked Is_Delayed='Yes' actually arrived early or on-time (≤0 days); 19 delayed orders had wrong day counts.</p>
+            </div>
+            <div class="bi-card p-4">
+              <div class="text-[10px] font-mono uppercase text-[#686E73]">Finding 02 · SLA Rule Contradiction</div>
+              <div id="dq-count-99" class="text-2xl font-extrabold text-[#1F2428] mt-1">99</div>
+              <div class="text-xs font-bold text-[#323A45] mt-1">Disobeying Delay &gt; 2 Days Rule</div>
+              <p class="text-[11px] text-[#686E73] mt-1">All 99 records had legacy Delay_Days = 3 while SLA_Breached = 'No'. True calendar date delta proved all 99 arrived early/on-time.</p>
+            </div>
+            <div class="bi-card p-4">
+              <div class="text-[10px] font-mono uppercase text-[#686E73]">Finding 03 · Missing Delay Reasons</div>
+              <div id="dq-count-233" class="text-2xl font-extrabold text-[#1F2428] mt-1">233</div>
+              <div class="text-xs font-bold text-[#323A45] mt-1">Delayed Flags with NULL Reason</div>
+              <p class="text-[11px] text-[#686E73] mt-1">100% of the 233 missing delay reasons occurred on orders delivered early or on-time. Reconciled to Not Applicable.</p>
+            </div>
+            <div class="bi-card p-4">
+              <div class="text-[10px] font-mono uppercase text-[#686E73]">Finding 04 · Early Capping Artifact</div>
+              <div id="dq-count-1723" class="text-2xl font-extrabold text-[#1F2428] mt-1">1,723</div>
+              <div class="text-xs font-bold text-[#323A45] mt-1">Total Raw Date-Delta Discrepancies</div>
+              <p class="text-[11px] text-[#686E73] mt-1">Includes 1,471 early deliveries where legacy ingestion capped negative lead variances (-1 to -3 days) at 0.</p>
+            </div>
+          </div>
+
+          <div class="bi-card p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <h3 class="text-xs font-bold text-[#1F2428]">Forensic Reconciliation Table (Legacy Source Columns vs Derived Ground-Truth Columns)</h3>
+                <p class="text-[11px] text-[#686E73]">Preserves original source fields alongside Calculated_Delay_Days, Calculated_Delivery_Status, and Calculated_SLA_Breach</p>
+              </div>
+            </div>
+            <div class="overflow-x-auto max-h-[460px]">
+              <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr class="bg-[#E6E1DA] text-[#323A45] font-semibold sticky top-0">
+                    <th class="py-2 px-3">Order ID</th>
+                    <th class="py-2 px-3">City / Carrier</th>
+                    <th class="py-2 px-3">Promised → Actual</th>
+                    <th class="py-2 px-3 text-[#A63A3A]">Legacy Delay</th>
+                    <th class="py-2 px-3 text-[#2B6E46]">Calculated Delay</th>
+                    <th class="py-2 px-3 text-[#A63A3A]">Legacy Status</th>
+                    <th class="py-2 px-3 text-[#2B6E46]">Calculated Status</th>
+                    <th class="py-2 px-3">Legacy → Calc SLA</th>
+                    <th class="py-2 px-3">Reconciled Reason</th>
+                  </tr>
+                </thead>
+                <tbody id="dq-table-body" class="divide-y divide-[#E2DDD5] font-mono text-[11px]"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================================================================ -->
+        <!-- TAB 3: CARRIER REBALANCING SIMULATOR                             -->
+        <!-- ================================================================ -->
+        <div id="tab-rebalance" class="hidden space-y-4">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div class="bi-card p-5 space-y-4">
+              <div>
+                <div class="text-[10px] font-mono uppercase text-[#686E73]">Prescriptive What-If Analysis</div>
+                <h2 class="text-sm font-bold text-[#1F2428] mt-1">3PL Carrier Volume Rebalancing Simulator</h2>
+                <p class="text-xs text-[#686E73] mt-1">Model shifting dispatch allocation from bottom-performing carriers (DTDC, Dunzo) to Tier-1 benchmark partners (Ecom Express, Shadowfax, Delhivery).</p>
+              </div>
+
+              <div class="p-3.5 rounded-lg bg-[#E6E1DA] border border-[#D5CFC7] space-y-2">
+                <div class="flex justify-between items-center">
+                  <label class="text-xs font-semibold text-[#1F2428]">Volume Reallocation %</label>
+                  <span id="sim-slider-val" class="text-sm font-mono font-bold text-[#1F2428]">15%</span>
+                </div>
+                <input id="sim-slider" type="range" min="0" max="50" step="5" value="15" oninput="onSliderChange(this.value)" class="w-full accent-[#2C3137] cursor-pointer" />
+              </div>
+
+              <div class="space-y-2 text-xs">
+                <div class="p-3 rounded bg-[#E6E1DA] flex justify-between">
+                  <span class="text-[#686E73]">Dispatches Reallocated</span>
+                  <span id="sim-shifted" class="font-mono font-bold text-[#1F2428]">—</span>
+                </div>
+                <div class="p-3 rounded bg-[#E6E1DA] flex justify-between">
+                  <span class="text-[#686E73]">SLA Breaches Avoided</span>
+                  <span id="sim-avoided" class="font-mono font-bold text-[#2B6E46]">—</span>
+                </div>
+                <div class="p-3 rounded bg-[#E6E1DA] flex justify-between">
+                  <span class="text-[#686E73]">Projected Network Breach Rate</span>
+                  <span id="sim-new-rate" class="font-mono font-bold text-[#1F2428]">—</span>
+                </div>
+                <div class="p-3 rounded bg-[#323A45] text-white flex justify-between items-center">
+                  <span class="font-medium">GMV Protected from SLA Breach</span>
+                  <span id="sim-gmv" class="text-sm font-mono font-bold">—</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="lg:col-span-2 bi-card p-5">
+              <h3 class="text-xs font-bold text-[#1F2428] mb-1">3PL Carrier League Scorecard</h3>
+              <p class="text-[11px] text-[#686E73] mb-3">Ranked by SLA breach rate across active filter selection</p>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr class="bg-[#E6E1DA] text-[#323A45] font-semibold">
+                      <th class="py-2 px-3">Rank</th>
+                      <th class="py-2 px-3">Carrier Partner</th>
+                      <th class="py-2 px-3">Dispatches</th>
+                      <th class="py-2 px-3">On-Time Rate</th>
+                      <th class="py-2 px-3">SLA Breach Rate</th>
+                      <th class="py-2 px-3">Avg Lead Days</th>
+                      <th class="py-2 px-3">GMV Handled</th>
+                    </tr>
+                  </thead>
+                  <tbody id="vendor-league-body" class="divide-y divide-[#E2DDD5] font-mono text-xs"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================================================================ -->
+        <!-- TAB 4: READ-ONLY AI SQL COPILOT (WITH CURATED EXAMPLES)          -->
+        <!-- ================================================================ -->
+        <div id="tab-copilot" class="hidden space-y-4">
+
+          <!-- TOP NATURAL LANGUAGE PROMPT BAR & QUICK EXAMPLE CHIPS -->
+          <div class="bi-card p-4 space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 class="text-sm font-bold text-[#1F2428]">Read-Only Natural-Language-to-SQL Analytics Copilot</h2>
+                <p class="text-[11px] text-[#686E73]">Ask any operational question in plain English or click a curated business case below to generate, validate, and execute read-only SQLite queries (`?mode=ro`).</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] font-mono px-2.5 py-1 rounded bg-[#E6E1DA] border border-[#D5CFC7] text-[#323A45] font-semibold">DDL/DML Guardrail Active · SQLite ?mode=ro</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-2.5">
+              <div class="lg:col-span-8 flex gap-2">
+                <input id="copilot-question" type="text" placeholder="e.g., Which delivery zones have the highest SLA breach rate and GMV at risk?" onkeydown="if(event.key==='Enter') askCopilotFromInput()" class="flex-1 bg-white border border-[#DCD6CD] rounded-lg px-3.5 py-2 text-xs text-[#1F2428] outline-none focus:border-[#323A45]" />
+                <button type="button" onclick="askCopilotFromInput()" class="bg-[#2C3137] hover:bg-[#3A4047] text-white px-4 py-2 rounded-lg text-xs font-semibold transition shrink-0">
+                  Generate &amp; Run SQL
+                </button>
+              </div>
+              <div class="lg:col-span-4 flex items-center gap-2">
+                <input id="copilot-api-key" type="password" placeholder="Optional Gemini 2.5 Flash Key (AIza...)" class="w-full bg-white border border-[#DCD6CD] rounded-lg px-3 py-2 text-xs font-mono text-[#1F2428] outline-none focus:border-[#323A45]" />
+              </div>
+            </div>
+
+            <!-- Quick Example Chips (1-Click Prompts) -->
+            <div class="pt-1">
+              <div class="text-[10px] font-mono uppercase tracking-wider text-[#686E73] mb-1.5">Try Example Natural-Language Questions (Click to Run):</div>
+              <div class="flex flex-wrap gap-1.5">
+                <button type="button" onclick="selectCopilotPreset(0)" class="px-2.5 py-1 rounded-full bg-[#E6E1DA] hover:bg-[#323A45] hover:text-white border border-[#D5CFC7] text-[11px] font-medium text-[#1F2428] transition">
+                  1. Zone SLA Breach &amp; GMV Risk
+                </button>
+                <button type="button" onclick="selectCopilotPreset(1)" class="px-2.5 py-1 rounded-full bg-[#E6E1DA] hover:bg-[#323A45] hover:text-white border border-[#D5CFC7] text-[11px] font-medium text-[#1F2428] transition">
+                  2. 3PL Carrier Benchmark (CTE + DENSE_RANK)
+                </button>
+                <button type="button" onclick="selectCopilotPreset(2)" class="px-2.5 py-1 rounded-full bg-[#E6E1DA] hover:bg-[#323A45] hover:text-white border border-[#D5CFC7] text-[11px] font-medium text-[#1F2428] transition">
+                  3. Top 10 Delayed Cities (Pareto Window)
+                </button>
+                <button type="button" onclick="selectCopilotPreset(3)" class="px-2.5 py-1 rounded-full bg-[#E6E1DA] hover:bg-[#323A45] hover:text-white border border-[#D5CFC7] text-[11px] font-medium text-[#1F2428] transition">
+                  4. Delay Root Causes Breakdown
+                </button>
+                <button type="button" onclick="selectCopilotPreset(4)" class="px-2.5 py-1 rounded-full bg-[#E6E1DA] hover:bg-[#323A45] hover:text-white border border-[#D5CFC7] text-[11px] font-medium text-[#1F2428] transition">
+                  5. Forensic Data Quality Audit (252 / 99 / 233)
+                </button>
+                <button type="button" onclick="selectCopilotPreset(5)" class="px-2.5 py-1 rounded-full bg-[#E6E1DA] hover:bg-[#323A45] hover:text-white border border-[#D5CFC7] text-[11px] font-medium text-[#1F2428] transition">
+                  6. Monsoon Weather × COD Impact
+                </button>
+                <button type="button" onclick="selectCopilotPreset(6)" class="px-2.5 py-1 rounded-full bg-[#E6E1DA] hover:bg-[#323A45] hover:text-white border border-[#D5CFC7] text-[11px] font-medium text-[#1F2428] transition">
+                  7. Monthly Trend &amp; MoM Drift (LAG Window)
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <!-- Left 4 Cols: 7 Curated SQL Case Cards (Pre-populated & Always Visible) -->
+            <div class="lg:col-span-4 bi-card p-4 space-y-2.5">
+              <div class="flex items-center justify-between border-b border-[#DCD6CD] pb-2">
+                <h3 class="text-xs font-bold text-[#1F2428]">7 Curated SQL Interview Case Queries</h3>
+                <span class="text-[10px] font-mono text-[#686E73]">Click any card</span>
+              </div>
+
+              <div id="copilot-presets-list" class="space-y-2 max-h-[540px] overflow-y-auto pr-1">
+                <button type="button" onclick="selectCopilotPreset(0)" id="copilot-card-0" class="copilot-example-card active w-full text-left p-2.5 space-y-1">
+                  <div class="flex items-center justify-between text-[10px] font-mono opacity-80">
+                    <span class="font-bold">Q1 · ZONE SLA &amp; GMV</span>
+                    <span>JOIN · GROUP BY</span>
+                  </div>
+                  <div class="text-xs font-bold">Which delivery zones have the highest SLA breach rate and GMV at risk?</div>
+                  <div class="text-[10px] opacity-75">Aggregates SLA breaches and GMV exposure across geographic zones.</div>
+                </button>
+
+                <button type="button" onclick="selectCopilotPreset(1)" id="copilot-card-1" class="copilot-example-card w-full text-left p-2.5 space-y-1">
+                  <div class="flex items-center justify-between text-[10px] font-mono opacity-80">
+                    <span class="font-bold">Q2 · 3PL BENCHMARK</span>
+                    <span>CTE · DENSE_RANK()</span>
+                  </div>
+                  <div class="text-xs font-bold">Rank all 3PL carriers by SLA breach rate vs network average using a CTE.</div>
+                  <div class="text-[10px] opacity-75">Benchmarks each 3PL partner against network average breach rate.</div>
+                </button>
+
+                <button type="button" onclick="selectCopilotPreset(2)" id="copilot-card-2" class="copilot-example-card w-full text-left p-2.5 space-y-1">
+                  <div class="flex items-center justify-between text-[10px] font-mono opacity-80">
+                    <span class="font-bold">Q3 · CITY PARETO 80/20</span>
+                    <span>SUM() OVER ()</span>
+                  </div>
+                  <div class="text-xs font-bold">Which top 10 cities contribute the largest share of delayed shipments?</div>
+                  <div class="text-[10px] opacity-75">Computes each city's exact percentage share of total network delays.</div>
+                </button>
+
+                <button type="button" onclick="selectCopilotPreset(3)" id="copilot-card-3" class="copilot-example-card w-full text-left p-2.5 space-y-1">
+                  <div class="flex items-center justify-between text-[10px] font-mono opacity-80">
+                    <span class="font-bold">Q4 · ROOT CAUSE AUDIT</span>
+                    <span>LEFT JOIN · WINDOW</span>
+                  </div>
+                  <div class="text-xs font-bold">What are the primary root causes of delivery delays and SLA breaches?</div>
+                  <div class="text-[10px] opacity-75">Quantifies delay frequency and severe (&gt;2d) SLA breaches by cause.</div>
+                </button>
+
+                <button type="button" onclick="selectCopilotPreset(4)" id="copilot-card-4" class="copilot-example-card w-full text-left p-2.5 space-y-1">
+                  <div class="flex items-center justify-between text-[10px] font-mono opacity-80">
+                    <span class="font-bold">Q5 · DATA FORENSICS</span>
+                    <span>CASE RECONCILIATION</span>
+                  </div>
+                  <div class="text-xs font-bold">Show the forensic breakdown of legacy data-quality discrepancies (252 / 99 / 233).</div>
+                  <div class="text-[10px] opacity-75">Proves the exact counts of raw logging defects across 5,200 rows.</div>
+                </button>
+
+                <button type="button" onclick="selectCopilotPreset(5)" id="copilot-card-5" class="copilot-example-card w-full text-left p-2.5 space-y-1">
+                  <div class="flex items-center justify-between text-[10px] font-mono opacity-80">
+                    <span class="font-bold">Q6 · MONSOON × COD</span>
+                    <span>MULTI-DIM GROUP BY</span>
+                  </div>
+                  <div class="text-xs font-bold">How do Monsoon weather and COD payment modes impact SLA breach rates?</div>
+                  <div class="text-[10px] opacity-75">Isolates weather surge and doorstep COD collection friction.</div>
+                </button>
+
+                <button type="button" onclick="selectCopilotPreset(6)" id="copilot-card-6" class="copilot-example-card w-full text-left p-2.5 space-y-1">
+                  <div class="flex items-center justify-between text-[10px] font-mono opacity-80">
+                    <span class="font-bold">Q7 · MONTHLY LAG()</span>
+                    <span>CTE · LAG() OVER</span>
+                  </div>
+                  <div class="text-xs font-bold">What is the month-over-month (MoM) order volume and SLA breach rate change?</div>
+                  <div class="text-[10px] opacity-75">Tracks sequential monthly dispatch growth and breach drift.</div>
+                </button>
+              </div>
+            </div>
+
+            <!-- Right 8 Cols: SQL Editor + Guardrail Banner + Results Table -->
+            <div class="lg:col-span-8 bi-card p-4 space-y-3">
+              <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#DCD6CD] pb-2">
+                <div>
+                  <h3 id="copilot-active-title" class="text-xs font-bold text-[#1F2428]">SQL Query Workbench</h3>
+                  <p id="copilot-active-desc" class="text-[11px] text-[#686E73]">Select a curated question on the left or edit the SQL query below and click Execute SQL.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button type="button" onclick="exportCopilotCSV()" class="px-2.5 py-1 rounded bg-[#E6E1DA] hover:bg-[#DCD6CD] text-[11px] font-medium text-[#1F2428]">Export CSV</button>
+                  <button type="button" onclick="testGuardrailAttack()" class="px-2.5 py-1 rounded bg-[#EAD8D8] hover:bg-[#DEC5C5] text-[11px] font-medium text-[#8B2626]">Test DROP TABLE Block</button>
+                  <button type="button" onclick="runCustomSQL()" class="px-3 py-1 rounded bg-[#2C3137] hover:bg-[#3A4047] text-white text-[11px] font-semibold">Execute SQL</button>
+                </div>
+              </div>
+
+              <textarea id="copilot-sql-editor" rows="8" class="w-full bg-[#252A30] text-[#E6E1DA] border border-[#3A4047] rounded-lg p-3 font-mono text-xs outline-none"></textarea>
+
+              <div id="copilot-status-banner" class="rounded p-2.5 text-xs font-mono border bg-[#E6E1DA] border-[#D5CFC7] text-[#1F2428]"></div>
+
+              <div class="overflow-x-auto max-h-[300px]">
+                <table class="w-full text-left border-collapse text-xs">
+                  <thead id="copilot-table-head" class="bg-[#E6E1DA] text-[#323A45] font-semibold sticky top-0"></thead>
+                  <tbody id="copilot-table-body" class="divide-y divide-[#E2DDD5] font-mono text-xs"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================================================================ -->
+        <!-- TAB 5: FORECAST & ANOMALIES                                      -->
+        <!-- ================================================================ -->
+        <div id="tab-anomalies" class="hidden space-y-4">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="bi-card p-4">
+              <h3 class="text-xs font-bold text-[#1F2428]">6-Month Forward Dispatch Forecast (Holt-Winters Exponential Smoothing)</h3>
+              <p class="text-[11px] text-[#686E73] mb-2">Projected monthly order demand with 80% confidence interval</p>
+              <div id="chart-forecast" class="w-full h-[320px]"></div>
+            </div>
+            <div class="bi-card p-4">
+              <h3 class="text-xs font-bold text-[#1F2428]">Isolation Forest Multivariate Outlier Radar (Top 5% Contamination)</h3>
+              <p class="text-[11px] text-[#686E73] mb-2">Statistically anomalous cycle-time, delay, and high-GMV multi-attempt records</p>
+              <div class="overflow-x-auto max-h-[320px]">
+                <table class="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr class="bg-[#E6E1DA] text-[#323A45] font-semibold sticky top-0">
+                      <th class="py-2 px-2.5">Order ID</th>
+                      <th class="py-2 px-2.5">City / Carrier</th>
+                      <th class="py-2 px-2.5">GMV</th>
+                      <th class="py-2 px-2.5">Lead / Delay</th>
+                      <th class="py-2 px-2.5">Attempts</th>
+                      <th class="py-2 px-2.5">Percentile</th>
+                    </tr>
+                  </thead>
+                  <tbody id="anomaly-table-body" class="divide-y divide-[#E2DDD5] font-mono text-[11px]"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=20261111_v5"></script>
+</body>
+</html>
